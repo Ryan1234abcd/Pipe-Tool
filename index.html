@@ -101,4 +101,172 @@ function draw() {
   const count = +countEl.value;
   const od = +odEl.value;
   const ins = +insEl.value;
-  const spac
+  const spacing = +spacingEl.value;
+  const align = alignEl.value;
+
+  const svg = document.getElementById("diagram");
+  svg.innerHTML = "";
+
+  const scale = 0.5;
+  const rOuter = (od/2 + ins) * scale;
+
+  let baseY = 120;
+
+  for (let i = 0; i < count; i++) {
+    let cy;
+
+    if (align === "center") {
+      cy = baseY;
+    } else if (align === "top") {
+      cy = baseY + rOuter;
+    } else if (align === "bottom") {
+      cy = baseY - rOuter;
+    }
+
+    const cx = 60 + i * spacing * scale;
+
+    // outer
+    const outer = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    outer.setAttribute("cx", cx);
+    outer.setAttribute("cy", cy);
+    outer.setAttribute("r", rOuter);
+    outer.setAttribute("fill", "none");
+    outer.setAttribute("stroke", "black");
+
+    // inner
+    const inner = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    inner.setAttribute("cx", cx);
+    inner.setAttribute("cy", cy);
+    inner.setAttribute("r", (od/2)*scale);
+    inner.setAttribute("fill", "none");
+    inner.setAttribute("stroke", "gray");
+
+    svg.appendChild(outer);
+    svg.appendChild(inner);
+  }
+}
+
+// ---------- COPY IMAGE ----------
+async function copyImage() {
+  const svg = document.getElementById("diagram");
+  const data = new XMLSerializer().serializeToString(svg);
+  const blob = new Blob([data], {type: "image/svg+xml"});
+  const url = URL.createObjectURL(blob);
+
+  const img = new Image();
+  img.onload = async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 800;
+    canvas.height = 250;
+
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+
+    canvas.toBlob(async (pngBlob) => {
+      await navigator.clipboard.write([
+        new ClipboardItem({ "image/png": pngBlob })
+      ]);
+      alert("Copied!");
+    });
+
+    URL.revokeObjectURL(url);
+  };
+
+  img.src = url;
+}
+
+// ---------- UNIT CONVERTER ----------
+const data = {
+  length: {
+    mm: 1,
+    m: 1000,
+    inch: 25.4,
+    ft: 304.8
+  },
+  volume: {
+    L: 1,
+    m3: 1000,
+    ft3: 28.3168
+  },
+  capacity: {
+    kW: 1,
+    W: 0.001,
+    BTUhr: 0.000293
+  },
+  massflow: {
+    kgs: 1,
+    kgh: 1/3600,
+    lps: 1
+  }
+};
+
+let activeUnit = null;
+let currentValues = {};
+
+function loadUnits() {
+  const cat = category.value;
+  const container = document.getElementById("units");
+  container.innerHTML = "";
+
+  activeUnit = null;
+
+  Object.keys(data[cat]).forEach(unit => {
+    const div = document.createElement("div");
+    div.className = "unit";
+
+    const input = document.createElement("input");
+    input.type = "number";
+
+    input.oninput = () => convert(unit, input.value);
+
+    div.onclick = () => setActive(unit);
+
+    div.innerHTML = unit;
+    div.appendChild(input);
+
+    container.appendChild(div);
+  });
+}
+
+function setActive(unit) {
+  activeUnit = unit;
+  document.querySelectorAll(".unit").forEach(el => {
+    el.classList.add("inactive");
+    el.classList.remove("active");
+
+    if (el.firstChild.nodeValue === unit) {
+      el.classList.add("active");
+      el.classList.remove("inactive");
+    }
+  });
+}
+
+function convert(unit, value) {
+  const cat = category.value;
+  const base = value * data[cat][unit];
+
+  document.querySelectorAll(".unit").forEach(el => {
+    const u = el.firstChild.nodeValue;
+    const input = el.querySelector("input");
+
+    if (u !== unit) {
+      input.value = (base / data[cat][u]).toFixed(3);
+    }
+  });
+
+  setActive(unit);
+}
+
+// init
+loadUnits();
+
+const countEl = document.getElementById("count");
+const odEl = document.getElementById("od");
+const insEl = document.getElementById("ins");
+const spacingEl = document.getElementById("spacing");
+const alignEl = document.getElementById("align");
+
+</script>
+
+</body>
+</html>
