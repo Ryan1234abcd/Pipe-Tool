@@ -5,7 +5,7 @@
 <title>Pipe Layout Tool</title>
 <style>
   body { font-family: Arial; padding: 20px; }
-  input, button { margin: 5px; }
+  input, button, select { margin: 5px; }
   .card { border: 1px solid #ccc; padding: 15px; margin-top: 20px; }
 </style>
 </head>
@@ -16,44 +16,122 @@
 <label>Name:</label>
 <input id="name" value="Bridge 1 - CHW"><br>
 
-<label>Number of Pipes:</label>
-<input id="count" type="number" value="4"><br>
-
-<label>Pipe OD (mm):</label>
-<input id="od" type="number" value="114"><br>
-
-<label>Insulation (mm):</label>
-<input id="ins" type="number" value="25"><br>
+<label>Spacing Mode:</label>
+<select id="mode">
+  <option value="centre">Centre Spacing</option>
+  <option value="clearance">Clearance</option>
+</select><br>
 
 <label>Centre Spacing (mm):</label>
 <input id="spacing" type="number" value="200"><br>
 
+<label>Clearance (mm):</label>
+<select id="clearance">
+  <option>50</option>
+  <option>100</option>
+  <option>150</option>
+</select><br>
+
+<h3>Pipes</h3>
+<div id="pipes"></div>
+<button onclick="addPipe()">Add Pipe</button>
+<button onclick="copyLastPipe()">Copy Last Pipe</button>
+
+<h3>Clearance Zone</h3>
+<label>Side Clearance (mm):</label>
+<input id="sideClear" type="number" value="50"><br>
+
+<label>Top Clearance (mm):</label>
+<input id="topClear" type="number" value="50"><br>
+
 <br>
 <button onclick="draw()">Generate</button>
 
-<div class="card">
-  <svg id="diagram" width="800" height="200"></svg>
-</div>
-
-<br>
-<button onclick="copyImage()">Copy Diagram</button>
-<button onclick="copyText()">Copy Summary</button>
+<div id="layouts"></div>
 
 <script>
+
+function round25(x) {
+  return Math.round(x / 25) * 25;
+}
+
+function addPipe(od=114, ins=25) {
+  const div = document.createElement("div");
+  div.innerHTML = `
+    OD: <input type="number" value="${od}">
+    Ins: <input type="number" value="${ins}">
+  `;
+  document.getElementById("pipes").appendChild(div);
+}
+
+function copyLastPipe() {
+  const pipes = document.getElementById("pipes").children;
+  if (pipes.length === 0) return;
+  const last = pipes[pipes.length - 1].querySelectorAll("input");
+  addPipe(last[0].value, last[1].value);
+}
+
+// start with 1 pipe
+addPipe();
+
 function draw() {
   const name = document.getElementById("name").value;
-  const count = +document.getElementById("count").value;
-  const od = +document.getElementById("od").value;
-  const ins = +document.getElementById("ins").value;
-  const spacing = +document.getElementById("spacing").value;
+  const mode = document.getElementById("mode").value;
+  const spacingInput = +document.getElementById("spacing").value;
+  const clearance = +document.getElementById("clearance").value;
 
-  const totalOD = od + 2 * ins;
+  const sideClear = +document.getElementById("sideClear").value;
+  const topClear = +document.getElementById("topClear").value;
 
-  const svg = document.getElementById("diagram");
-  svg.innerHTML = "";
+  const pipeInputs = document.getElementById("pipes").children;
 
-  const scale = 0.5; // adjust for display
-  const radius = (totalOD / 2) * scale;
+  let pipes = [];
+
+  for (let p of pipeInputs) {
+    const inputs = p.querySelectorAll("input");
+    const od = +inputs[0].value;
+    const ins = +inputs[1].value;
+    const totalOD = od + 2 * ins;
+
+    pipes.push({
+      od,
+      ins,
+      totalOD
+    });
+  }
+
+  const scale = 0.5;
+
+  // Calculate positions (RIGHT to LEFT)
+  let centres = [];
+  let currentX = 700; // anchor point (right side)
+
+  centres.push(currentX);
+
+  for (let i = 1; i < pipes.length; i++) {
+    let dist;
+
+    if (mode === "centre") {
+      dist = round25(spacingInput);
+    } else {
+      const prev = pipes[i - 1].totalOD / 2;
+      const curr = pipes[i].totalOD / 2;
+
+      dist = prev + curr + clearance;
+      dist = round25(dist);
+    }
+
+    currentX -= dist * scale;
+    centres.push(currentX);
+  }
+
+  // SVG
+  const card = document.createElement("div");
+  card.className = "card";
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", 800);
+  svg.setAttribute("height", 300);
 
   // Title
   const title = document.createElementNS("http://www.w3.org/2000/svg", "text");
@@ -62,11 +140,13 @@ function draw() {
   title.textContent = name;
   svg.appendChild(title);
 
-  for (let i = 0; i < count; i++) {
-    const cx = 50 + i * spacing * scale;
-    const cy = 100;
+  const cy = 150;
 
-    // insulation circle
+  // Draw pipes
+  pipes.forEach((p, i) => {
+    const cx = centres[i];
+    const radius = (p.totalOD / 2) * scale;
+
     const outer = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     outer.setAttribute("cx", cx);
     outer.setAttribute("cy", cy);
@@ -75,68 +155,73 @@ function draw() {
     outer.setAttribute("stroke", "black");
     svg.appendChild(outer);
 
-    // pipe circle
     const inner = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     inner.setAttribute("cx", cx);
     inner.setAttribute("cy", cy);
-    inner.setAttribute("r", (od/2)*scale);
-    inner.setAttribute("fill", "none");
+    inner.setAttribute("r", (p.od / 2) * scale);
     inner.setAttribute("stroke", "gray");
+    inner.setAttribute("fill", "none");
     svg.appendChild(inner);
+
+    // Diameter label
+    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    label.setAttribute("x", cx - 20);
+    label.setAttribute("y", cy + 5);
+    label.textContent = p.od;
+    svg.appendChild(label);
+  });
+
+  // Draw dimensions between centres
+  for (let i = 1; i < centres.length; i++) {
+    const x1 = centres[i - 1];
+    const x2 = centres[i];
+
+    const y = cy + 60;
+
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("x1", x1);
+    line.setAttribute("x2", x2);
+    line.setAttribute("y1", y);
+    line.setAttribute("y2", y);
+    line.setAttribute("stroke", "black");
+    svg.appendChild(line);
+
+    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    text.setAttribute("x", (x1 + x2) / 2 - 20);
+    text.setAttribute("y", y - 5);
+
+    const distReal = Math.abs(x1 - x2) / scale;
+    text.textContent = round25(distReal);
+
+    svg.appendChild(text);
   }
+
+  // Clearance zone
+  const leftMost = Math.min(...centres);
+  const rightMost = Math.max(...centres);
+
+  const maxRadius = Math.max(...pipes.map(p => p.totalOD / 2 * scale));
+
+  const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  rect.setAttribute("x", leftMost - maxRadius - sideClear * scale);
+  rect.setAttribute("y", cy - maxRadius - topClear * scale);
+  rect.setAttribute("width",
+    (rightMost - leftMost) +
+    2 * (maxRadius + sideClear * scale)
+  );
+  rect.setAttribute("height",
+    2 * maxRadius + topClear * scale
+  );
+  rect.setAttribute("fill", "none");
+  rect.setAttribute("stroke", "red");
+  rect.setAttribute("stroke-dasharray", "5,5");
+
+  svg.appendChild(rect);
+
+  card.appendChild(svg);
+  document.getElementById("layouts").appendChild(card);
 }
 
-async function copyImage() {
-  const svg = document.getElementById("diagram");
-  const data = new XMLSerializer().serializeToString(svg);
-  const blob = new Blob([data], {type: "image/svg+xml"});
-  const url = URL.createObjectURL(blob);
-
-  const img = new Image();
-  img.onload = async () => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 800;
-    canvas.height = 200;
-
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0);
-
-    canvas.toBlob(async (pngBlob) => {
-      await navigator.clipboard.write([
-        new ClipboardItem({ "image/png": pngBlob })
-      ]);
-      alert("Diagram copied!");
-    });
-
-    URL.revokeObjectURL(url);
-  };
-
-  img.src = url;
-}
-
-function copyText() {
-  const name = document.getElementById("name").value;
-  const count = document.getElementById("count").value;
-  const od = document.getElementById("od").value;
-  const ins = document.getElementById("ins").value;
-  const spacing = document.getElementById("spacing").value;
-
-  const totalWidth = (count - 1) * spacing;
-
-  const text = `
-${name}
-
-${count} pipes
-OD: ${od} mm
-Insulation: ${ins} mm
-
-Centre spacing: ${spacing} mm
-Total width: ${totalWidth} mm
-`;
-
-  navigator.clipboard.writeText(text);
-  alert("Summary copied!");
-}
 </script>
 
 </body>
