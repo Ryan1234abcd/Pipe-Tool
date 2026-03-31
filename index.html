@@ -2,227 +2,103 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Pipe Layout Tool</title>
+<title>Mechanical Tools</title>
 <style>
   body { font-family: Arial; padding: 20px; }
-  input, button, select { margin: 5px; }
-  .card { border: 1px solid #ccc; padding: 15px; margin-top: 20px; }
+  button { margin: 5px; cursor: pointer; }
+  .tab { display: none; }
+  .active { display: block; }
+
+  .unit {
+    padding: 5px;
+    cursor: pointer;
+  }
+
+  .unit.active {
+    font-weight: bold;
+    color: black;
+  }
+
+  .unit.inactive {
+    color: #aaa;
+  }
+
+  input { margin-left: 10px; }
 </style>
 </head>
 <body>
 
-<h2>Pipe Layout Tool</h2>
+<h2>Mechanical Tools</h2>
+
+<!-- Tabs -->
+<button onclick="showTab('pipe')">Pipe Tool</button>
+<button onclick="showTab('converter')">Unit Converter</button>
+
+<!-- ================= PIPE TOOL ================= -->
+<div id="pipe" class="tab active">
+
+<h3>Pipe Layout</h3>
 
 <label>Name:</label>
-<input id="name" value="Bridge 1 - CHW"><br>
+<input id="name" value="Bridge 1"><br>
 
-<label>Spacing Mode:</label>
-<select id="mode">
-  <option value="centre">Centre Spacing</option>
-  <option value="clearance">Clearance</option>
-</select><br>
+<label>Pipes:</label>
+<input id="count" type="number" value="4"><br>
 
-<label>Centre Spacing (mm):</label>
+<label>OD (mm):</label>
+<input id="od" type="number" value="114"><br>
+
+<label>Insulation (mm):</label>
+<input id="ins" type="number" value="25"><br>
+
+<label>Spacing (mm):</label>
 <input id="spacing" type="number" value="200"><br>
 
-<label>Clearance (mm):</label>
-<select id="clearance">
-  <option>50</option>
-  <option>100</option>
-  <option>150</option>
-</select><br>
+<label>Alignment:</label>
+<select id="align">
+  <option value="center">Centre</option>
+  <option value="top">Top</option>
+  <option value="bottom">Bottom</option>
+</select>
 
-<h3>Pipes</h3>
-<div id="pipes"></div>
-<button onclick="addPipe()">Add Pipe</button>
-<button onclick="copyLastPipe()">Copy Last Pipe</button>
-
-<h3>Clearance Zone</h3>
-<label>Side Clearance (mm):</label>
-<input id="sideClear" type="number" value="50"><br>
-
-<label>Top Clearance (mm):</label>
-<input id="topClear" type="number" value="50"><br>
-
-<br>
+<br><br>
 <button onclick="draw()">Generate</button>
 
-<div id="layouts"></div>
+<br><br>
+<svg id="diagram" width="800" height="250"></svg>
+
+<br>
+<button onclick="copyImage()">Copy Diagram</button>
+
+</div>
+
+<!-- ================= UNIT CONVERTER ================= -->
+<div id="converter" class="tab">
+
+<h3>Unit Converter</h3>
+
+<select id="category" onchange="loadUnits()">
+  <option value="length">Length</option>
+  <option value="volume">Volume</option>
+  <option value="capacity">Refrigeration Capacity</option>
+  <option value="massflow">Mass Flow</option>
+</select>
+
+<div id="units"></div>
+
+</div>
 
 <script>
 
-function round25(x) {
-  return Math.round(x / 25) * 25;
+// ---------- TAB SWITCH ----------
+function showTab(tab) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.getElementById(tab).classList.add("active");
 }
 
-function addPipe(od=114, ins=25) {
-  const div = document.createElement("div");
-  div.innerHTML = `
-    OD: <input type="number" value="${od}">
-    Ins: <input type="number" value="${ins}">
-  `;
-  document.getElementById("pipes").appendChild(div);
-}
-
-function copyLastPipe() {
-  const pipes = document.getElementById("pipes").children;
-  if (pipes.length === 0) return;
-  const last = pipes[pipes.length - 1].querySelectorAll("input");
-  addPipe(last[0].value, last[1].value);
-}
-
-// start with 1 pipe
-addPipe();
-
+// ---------- PIPE DRAW ----------
 function draw() {
-  const name = document.getElementById("name").value;
-  const mode = document.getElementById("mode").value;
-  const spacingInput = +document.getElementById("spacing").value;
-  const clearance = +document.getElementById("clearance").value;
-
-  const sideClear = +document.getElementById("sideClear").value;
-  const topClear = +document.getElementById("topClear").value;
-
-  const pipeInputs = document.getElementById("pipes").children;
-
-  let pipes = [];
-
-  for (let p of pipeInputs) {
-    const inputs = p.querySelectorAll("input");
-    const od = +inputs[0].value;
-    const ins = +inputs[1].value;
-    const totalOD = od + 2 * ins;
-
-    pipes.push({
-      od,
-      ins,
-      totalOD
-    });
-  }
-
-  const scale = 0.5;
-
-  // Calculate positions (RIGHT to LEFT)
-  let centres = [];
-  let currentX = 700; // anchor point (right side)
-
-  centres.push(currentX);
-
-  for (let i = 1; i < pipes.length; i++) {
-    let dist;
-
-    if (mode === "centre") {
-      dist = round25(spacingInput);
-    } else {
-      const prev = pipes[i - 1].totalOD / 2;
-      const curr = pipes[i].totalOD / 2;
-
-      dist = prev + curr + clearance;
-      dist = round25(dist);
-    }
-
-    currentX -= dist * scale;
-    centres.push(currentX);
-  }
-
-  // SVG
-  const card = document.createElement("div");
-  card.className = "card";
-
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("width", 800);
-  svg.setAttribute("height", 300);
-
-  // Title
-  const title = document.createElementNS("http://www.w3.org/2000/svg", "text");
-  title.setAttribute("x", 10);
-  title.setAttribute("y", 20);
-  title.textContent = name;
-  svg.appendChild(title);
-
-  const cy = 150;
-
-  // Draw pipes
-  pipes.forEach((p, i) => {
-    const cx = centres[i];
-    const radius = (p.totalOD / 2) * scale;
-
-    const outer = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    outer.setAttribute("cx", cx);
-    outer.setAttribute("cy", cy);
-    outer.setAttribute("r", radius);
-    outer.setAttribute("fill", "none");
-    outer.setAttribute("stroke", "black");
-    svg.appendChild(outer);
-
-    const inner = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    inner.setAttribute("cx", cx);
-    inner.setAttribute("cy", cy);
-    inner.setAttribute("r", (p.od / 2) * scale);
-    inner.setAttribute("stroke", "gray");
-    inner.setAttribute("fill", "none");
-    svg.appendChild(inner);
-
-    // Diameter label
-    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    label.setAttribute("x", cx - 20);
-    label.setAttribute("y", cy + 5);
-    label.textContent = p.od;
-    svg.appendChild(label);
-  });
-
-  // Draw dimensions between centres
-  for (let i = 1; i < centres.length; i++) {
-    const x1 = centres[i - 1];
-    const x2 = centres[i];
-
-    const y = cy + 60;
-
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    line.setAttribute("x1", x1);
-    line.setAttribute("x2", x2);
-    line.setAttribute("y1", y);
-    line.setAttribute("y2", y);
-    line.setAttribute("stroke", "black");
-    svg.appendChild(line);
-
-    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    text.setAttribute("x", (x1 + x2) / 2 - 20);
-    text.setAttribute("y", y - 5);
-
-    const distReal = Math.abs(x1 - x2) / scale;
-    text.textContent = round25(distReal);
-
-    svg.appendChild(text);
-  }
-
-  // Clearance zone
-  const leftMost = Math.min(...centres);
-  const rightMost = Math.max(...centres);
-
-  const maxRadius = Math.max(...pipes.map(p => p.totalOD / 2 * scale));
-
-  const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-  rect.setAttribute("x", leftMost - maxRadius - sideClear * scale);
-  rect.setAttribute("y", cy - maxRadius - topClear * scale);
-  rect.setAttribute("width",
-    (rightMost - leftMost) +
-    2 * (maxRadius + sideClear * scale)
-  );
-  rect.setAttribute("height",
-    2 * maxRadius + topClear * scale
-  );
-  rect.setAttribute("fill", "none");
-  rect.setAttribute("stroke", "red");
-  rect.setAttribute("stroke-dasharray", "5,5");
-
-  svg.appendChild(rect);
-
-  card.appendChild(svg);
-  document.getElementById("layouts").appendChild(card);
-}
-
-</script>
-
-</body>
-</html>
+  const count = +countEl.value;
+  const od = +odEl.value;
+  const ins = +insEl.value;
+  const spac
