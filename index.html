@@ -5,71 +5,62 @@
 <title>Mechanical Tools</title>
 
 <style>
-/* BASIC PAGE STYLE */
 body { font-family: Arial; padding: 20px; }
-button { margin: 5px; }
 
-/* TAB SYSTEM */
+button { margin: 5px; padding: 6px 10px; }
+
 .tab { display: none; }
 .tab.active { display: block; }
 
-/* UNIT CONVERTER STYLES */
 .unit { padding: 5px; cursor: pointer; }
 .unit.active { font-weight: bold; }
 .unit.inactive { color: #aaa; }
 
-/* SMALL TEXT IN SVG */
 svg text { font-size: 10px; }
 </style>
-
 </head>
+
 <body>
 
 <h2>Mechanical Tools</h2>
 
-<!-- TAB BUTTONS -->
+<!-- TABS -->
 <button onclick="showTab('pipe')">Pipe Tool</button>
 <button onclick="showTab('converter')">Unit Converter</button>
+<button onclick="showTab('iso')">Isometric Tool</button>
 
 <!-- ================= PIPE TOOL ================= -->
 <div id="pipe" class="tab active">
 
 <h3>Pipe Layout</h3>
 
-<!-- PIPE TYPE -->
 <label>Pipe Type:</label>
 <select id="pipeType" onchange="loadSizes()">
   <option value="steel40">Sch 40 Steel</option>
   <option value="steel80">Sch 80 Steel</option>
   <option value="copper">Copper</option>
-  <option value="k65">K65 Refrigeration</option>
+  <option value="k65">K65</option>
   <option value="dairy">Dairy Tube</option>
 </select><br>
 
-<!-- PIPE SIZE -->
 <label>Size:</label>
 <select id="pipeSize"></select><br>
 
-<!-- NUMBER OF PIPES -->
-<label>Number of Pipes:</label>
+<label>Pipes:</label>
 <input id="count" type="number" value="4"><br>
 
-<!-- INSULATION -->
-<label>Insulation (mm):</label>
+<label>Insulation:</label>
 <input id="ins" type="number" value="25"><br>
 
-<!-- SPACING MODE -->
-<label>Spacing Mode:</label>
+<label>Mode:</label>
 <select id="mode">
   <option value="centre">Centre Spacing</option>
   <option value="clearance">Clearance</option>
 </select><br>
 
-<!-- SPACING VALUE -->
-<label>Spacing / Clearance (mm):</label>
+<label>Spacing:</label>
 <input id="spacing" type="number" value="100"><br>
 
-<!-- ALIGNMENT -->
 <label>Alignment:</label>
 <select id="align">
   <option value="center">Centre</option>
@@ -96,7 +87,7 @@ svg text { font-size: 10px; }
 <select id="category" onchange="loadUnits()">
   <option value="length">Length</option>
   <option value="volume">Volume</option>
-  <option value="capacity">Refrigeration Capacity</option>
+  <option value="capacity">Capacity</option>
   <option value="massflow">Mass Flow</option>
 </select>
 
@@ -104,286 +95,291 @@ svg text { font-size: 10px; }
 
 </div>
 
+<!-- ================= ISO TOOL ================= -->
+<div id="iso" class="tab">
+
+<h3>Isometric Pipe Tool</h3>
+
+<h4>Description</h4>
+
+<label>Line Ref:</label>
+<input><br>
+
+<label>Area:</label>
+<input><br>
+
+<label>Pipe Type:</label>
+<select id="iso_pipeType" onchange="loadIsoSizes()">
+  <option value="steel40">Sch 40 Steel</option>
+  <option value="copper">Copper</option>
+</select>
+
+<label>Size:</label>
+<select id="iso_pipeSize"></select>
+
+<hr>
+
+<h4>Build Line</h4>
+
+<button onclick="addSegment()">Add Straight</button>
+<button onclick="addElbow()">Add Elbow</button>
+
+<div id="iso_builder"></div>
+
+<hr>
+
+<h4>Drawing</h4>
+
+<canvas id="isoCanvas" width="900" height="400"></canvas>
+
+<br>
+<button onclick="drawIso()">Generate</button>
+
+</div>
+
 <script>
 
-/* =====================================================
-   TAB SWITCHING FUNCTION
-===================================================== */
+/* ================= TAB SYSTEM ================= */
 function showTab(tab) {
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
   document.getElementById(tab).classList.add("active");
 }
 
-/* =====================================================
-   PIPE DATABASE (THIS DRIVES OD AUTOMATICALLY)
-===================================================== */
+/* ================= PIPE DATA ================= */
 const pipeData = {
-
-  steel40: {
-    "DN25": 33.4,
-    "DN32": 42.2,
-    "DN40": 48.3,
-    "DN50": 60.3,
-    "DN65": 76.1,
-    "DN80": 88.9,
-    "DN100": 114.3,
-    "DN150": 168.3
-  },
-
-  steel80: {
-    "DN25": 33.4,
-    "DN32": 42.2,
-    "DN40": 48.3,
-    "DN50": 60.3,
-    "DN65": 76.1,
-    "DN80": 88.9,
-    "DN100": 114.3,
-    "DN150": 168.3
-  },
-
-  copper: {
-    "15mm": 15.9,
-    "22mm": 22.2,
-    "28mm": 28.6,
-    "35mm": 34.9,
-    "42mm": 42.2,
-    "54mm": 54.0
-  },
-
-  k65: {
-    "16mm": 16,
-    "20mm": 20,
-    "25mm": 25,
-    "32mm": 32,
-    "40mm": 40
-  },
-
-  dairy: {
-    "25": 25,
-    "32": 32,
-    "40": 40,
-    "50": 50,
-    "65": 65,
-    "80": 80,
-    "100": 100
-  }
+  steel40: { "DN25":33.4,"DN50":60.3,"DN100":114.3 },
+  steel80: { "DN25":33.4,"DN50":60.3,"DN100":114.3 },
+  copper: { "22":22.2,"28":28.6,"54":54 },
+  k65: { "20":20,"25":25,"32":32 },
+  dairy: { "25":25,"50":50,"80":80 }
 };
 
-/* =====================================================
-   LOAD PIPE SIZES BASED ON TYPE
-===================================================== */
+/* LOAD PIPE SIZES */
 function loadSizes() {
-  const type = document.getElementById("pipeType").value;
-  const sizeSelect = document.getElementById("pipeSize");
-
-  sizeSelect.innerHTML = "";
-
+  const type = pipeType.value;
+  pipeSize.innerHTML = "";
   Object.keys(pipeData[type]).forEach(size => {
-    const opt = document.createElement("option");
-    opt.value = size;
-    opt.textContent = size;
-    sizeSelect.appendChild(opt);
+    const o = document.createElement("option");
+    o.value = size;
+    o.textContent = size;
+    pipeSize.appendChild(o);
   });
 }
 
-/* =====================================================
-   ROUND TO NEAREST 25mm
-===================================================== */
+/* ROUND TO 25 */
 function round25(x) {
-  return Math.round(x / 25) * 25;
+  return Math.round(x/25)*25;
 }
 
-/* =====================================================
-   DRAW PIPE DIAGRAM
-===================================================== */
+/* DRAW PIPE TOOL */
 function draw() {
 
-  const count = +document.getElementById("count").value;
-  const ins = +document.getElementById("ins").value;
-  const mode = document.getElementById("mode").value;
-  const spacingInput = +document.getElementById("spacing").value;
-  const align = document.getElementById("align").value;
+  const count = +countEl.value;
+  const ins = +insEl.value;
+  const mode = modeEl.value;
+  const spacingInput = +spacingEl.value;
+  const align = alignEl.value;
 
-  const type = document.getElementById("pipeType").value;
-  const size = document.getElementById("pipeSize").value;
+  const od = pipeData[pipeType.value][pipeSize.value];
+  const totalOD = od + 2*ins;
 
-  const od = pipeData[type][size];
+  let spacing = (mode==="centre") ? round25(spacingInput)
+                                 : round25(totalOD + spacingInput);
 
-  const totalOD = od + 2 * ins;
+  const totalWidth = (count-1)*spacing + totalOD;
 
-  /* DETERMINE SPACING */
-  let centreSpacing;
-
-  if (mode === "centre") {
-    centreSpacing = round25(spacingInput);
-  } else {
-    centreSpacing = round25(totalOD + spacingInput);
-  }
-
-  const totalWidth = (count - 1) * centreSpacing + totalOD;
-
-  const svg = document.getElementById("diagram");
+  const svg = diagram;
   svg.innerHTML = "";
 
   const scale = 0.5;
-  const r = (totalOD / 2) * scale;
+  const r = (totalOD/2)*scale;
 
   let baseY = 150;
 
-  /* DRAW PIPES */
-  for (let i = 0; i < count; i++) {
+  for(let i=0;i<count;i++){
 
-    let cy;
+    let cy = baseY;
+    if(align==="top") cy = baseY + r;
+    if(align==="bottom") cy = baseY - r;
 
-    if (align === "center") cy = baseY;
-    else if (align === "top") cy = baseY + r;
-    else cy = baseY - r;
+    const cx = 80 + i*spacing*scale;
 
-    const cx = 80 + i * centreSpacing * scale;
+    let outer = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    outer.setAttribute("cx",cx);
+    outer.setAttribute("cy",cy);
+    outer.setAttribute("r",r);
+    outer.setAttribute("stroke","black");
+    outer.setAttribute("fill","none");
 
-    /* OUTER (INSULATION) */
-    const outer = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    outer.setAttribute("cx", cx);
-    outer.setAttribute("cy", cy);
-    outer.setAttribute("r", r);
-    outer.setAttribute("stroke", "black");
-    outer.setAttribute("fill", "none");
-
-    /* INNER (PIPE) */
-    const inner = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    inner.setAttribute("cx", cx);
-    inner.setAttribute("cy", cy);
-    inner.setAttribute("r", (od/2)*scale);
-    inner.setAttribute("stroke", "gray");
-    inner.setAttribute("fill", "none");
+    let inner = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    inner.setAttribute("cx",cx);
+    inner.setAttribute("cy",cy);
+    inner.setAttribute("r",(od/2)*scale);
+    inner.setAttribute("stroke","gray");
+    inner.setAttribute("fill","none");
 
     svg.appendChild(outer);
     svg.appendChild(inner);
   }
 
-  /* TOTAL WIDTH DIMENSION */
-  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-  line.setAttribute("x1", 80);
-  line.setAttribute("y1", 250);
-  line.setAttribute("x2", 80 + totalWidth * scale);
-  line.setAttribute("y2", 250);
-  line.setAttribute("stroke", "black");
+  let txt = document.createElementNS("http://www.w3.org/2000/svg","text");
+  txt.setAttribute("x",200);
+  txt.setAttribute("y",20);
+  txt.textContent = "Spacing: "+spacing+" mm";
+  svg.appendChild(txt);
 
-  svg.appendChild(line);
-
-  const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-  text.setAttribute("x", 200);
-  text.setAttribute("y", 270);
-  text.textContent = "Total Width: " + totalWidth + " mm";
-
-  svg.appendChild(text);
-
-  /* CENTRE SPACING LABEL */
-  const spacingText = document.createElementNS("http://www.w3.org/2000/svg", "text");
-  spacingText.setAttribute("x", 200);
-  spacingText.setAttribute("y", 20);
-  spacingText.textContent = "Centre Spacing: " + centreSpacing + " mm";
-
-  svg.appendChild(spacingText);
+  let txt2 = document.createElementNS("http://www.w3.org/2000/svg","text");
+  txt2.setAttribute("x",200);
+  txt2.setAttribute("y",280);
+  txt2.textContent = "Total Width: "+totalWidth+" mm";
+  svg.appendChild(txt2);
 }
 
-/* =====================================================
-   COPY IMAGE TO CLIPBOARD
-===================================================== */
-async function copyImage() {
-  const svg = document.getElementById("diagram");
-  const data = new XMLSerializer().serializeToString(svg);
-  const blob = new Blob([data], {type: "image/svg+xml"});
+/* COPY IMAGE */
+async function copyImage(){
+  const data = new XMLSerializer().serializeToString(diagram);
+  const blob = new Blob([data],{type:"image/svg+xml"});
   const url = URL.createObjectURL(blob);
 
   const img = new Image();
-  img.onload = async () => {
+  img.onload = async()=>{
     const canvas = document.createElement("canvas");
-    canvas.width = 900;
-    canvas.height = 300;
+    canvas.width=900; canvas.height=300;
+    canvas.getContext("2d").drawImage(img,0,0);
 
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0);
-
-    canvas.toBlob(async (pngBlob) => {
-      await navigator.clipboard.write([
-        new ClipboardItem({ "image/png": pngBlob })
-      ]);
+    canvas.toBlob(async b=>{
+      await navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
       alert("Copied!");
     });
 
     URL.revokeObjectURL(url);
   };
-
-  img.src = url;
+  img.src=url;
 }
 
-/* =====================================================
-   UNIT CONVERTER DATA
-===================================================== */
+/* ================= UNIT CONVERTER ================= */
 const data = {
-  length: { mm:1, m:1000, inch:25.4, ft:304.8 },
-  volume: { L:1, m3:1000, ft3:28.3168 },
-  capacity: { kW:1, W:0.001, BTUhr:0.000293 },
-  massflow: { kgs:1, kgh:1/3600 }
+  length:{mm:1,m:1000,ft:304.8},
+  volume:{L:1,m3:1000},
+  capacity:{kW:1,W:0.001},
+  massflow:{kgs:1,kgh:1/3600}
 };
 
-/* LOAD UNITS */
-function loadUnits() {
-  const cat = document.getElementById("category").value;
-  const container = document.getElementById("units");
-  container.innerHTML = "";
-
-  Object.keys(data[cat]).forEach(unit => {
-    const div = document.createElement("div");
-    div.className = "unit";
-
-    const label = document.createElement("span");
-    label.textContent = unit;
-
-    const input = document.createElement("input");
-    input.type = "number";
-
-    input.oninput = () => convert(unit, input.value);
-    div.onclick = () => setActive(unit);
-
-    div.appendChild(label);
-    div.appendChild(input);
-    container.appendChild(div);
+function loadUnits(){
+  units.innerHTML="";
+  Object.keys(data[category.value]).forEach(u=>{
+    let d=document.createElement("div");
+    d.className="unit";
+    let span=document.createElement("span");
+    span.textContent=u;
+    let inp=document.createElement("input");
+    inp.oninput=()=>convert(u,inp.value);
+    d.onclick=()=>setActive(u);
+    d.appendChild(span);
+    d.appendChild(inp);
+    units.appendChild(d);
   });
 }
 
-/* SET ACTIVE UNIT */
-function setActive(unit) {
-  document.querySelectorAll(".unit").forEach(el => {
-    const u = el.querySelector("span").textContent;
-    el.classList.remove("active", "inactive");
-
-    if (u === unit) el.classList.add("active");
-    else el.classList.add("inactive");
+function setActive(u){
+  document.querySelectorAll(".unit").forEach(el=>{
+    let name=el.querySelector("span").textContent;
+    el.classList.remove("active","inactive");
+    el.classList.add(name===u?"active":"inactive");
   });
 }
 
-/* CONVERT VALUES */
-function convert(unit, value) {
-  const cat = document.getElementById("category").value;
-  const base = value * data[cat][unit];
+function convert(u,v){
+  const base=v*data[category.value][u];
+  document.querySelectorAll(".unit").forEach(el=>{
+    let name=el.querySelector("span").textContent;
+    let inp=el.querySelector("input");
+    if(name!==u) inp.value=(base/data[category.value][name]).toFixed(2);
+  });
+  setActive(u);
+}
 
-  document.querySelectorAll(".unit").forEach(el => {
-    const u = el.querySelector("span").textContent;
-    const input = el.querySelector("input");
+/* ================= ISO TOOL ================= */
+let isoSegments=[];
 
-    if (u !== unit) {
-      input.value = (base / data[cat][u]).toFixed(3);
+function loadIsoSizes(){
+  iso_pipeSize.innerHTML="";
+  Object.keys(pipeData[iso_pipeType.value]).forEach(s=>{
+    let o=document.createElement("option");
+    o.textContent=s;
+    iso_pipeSize.appendChild(o);
+  });
+}
+
+function addSegment(){
+  isoSegments.push({type:"straight",length:1000});
+}
+
+function addElbow(){
+  isoSegments.push({type:"elbow"});
+}
+
+function drawIso(){
+
+  const c=isoCanvas;
+  const ctx=c.getContext("2d");
+
+  ctx.clearRect(0,0,c.width,c.height);
+
+  for(let x=0;x<c.width;x+=20){
+    for(let y=0;y<c.height;y+=20){
+      ctx.fillRect(x,y,1,1);
     }
+  }
+
+  let x=200,y=200;
+  ctx.beginPath();
+  ctx.moveTo(x,y);
+
+  function iso(dx,dy,dz){
+    return [dx-dy,(dx+dy)/2-dz];
+  }
+
+  let dir="x";
+
+  isoSegments.forEach(s=>{
+
+    if(s.type==="straight"){
+      let dx=0,dy=0,dz=0;
+      if(dir==="x") dx=s.length/50;
+      if(dir==="y") dy=s.length/50;
+      if(dir==="z") dz=s.length/50;
+
+      let [ix,iy]=iso(dx,dy,dz);
+      let nx=x+ix*20;
+      let ny=y+iy*20;
+
+      ctx.lineTo(nx,ny);
+      ctx.fillText(s.length+"mm",(x+nx)/2,(y+ny)/2);
+
+      x=nx;y=ny;
+    }
+
+    if(s.type==="elbow"){
+      dir = dir==="x"?"y":dir==="y"?"z":"x";
+    }
+
   });
 
-  setActive(unit);
+  ctx.stroke();
 }
 
-/* INITIALISE */
+/* INIT */
 loadUnits();
 loadSizes();
+loadIsoSizes();
+
+/* SHORTCUTS */
+const countEl = document.getElementById("count");
+const insEl = document.getElementById("ins");
+const modeEl = document.getElementById("mode");
+const spacingEl = document.getElementById("spacing");
+const alignEl = document.getElementById("align");
 
 </script>
 
