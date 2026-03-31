@@ -5,16 +5,20 @@
 <title>Mechanical Tools</title>
 
 <style>
+/* BASIC PAGE STYLE */
 body { font-family: Arial; padding: 20px; }
 button { margin: 5px; }
 
+/* TAB SYSTEM */
 .tab { display: none; }
 .tab.active { display: block; }
 
+/* UNIT CONVERTER STYLES */
 .unit { padding: 5px; cursor: pointer; }
 .unit.active { font-weight: bold; }
 .unit.inactive { color: #aaa; }
 
+/* SMALL TEXT IN SVG */
 svg text { font-size: 10px; }
 </style>
 
@@ -23,6 +27,7 @@ svg text { font-size: 10px; }
 
 <h2>Mechanical Tools</h2>
 
+<!-- TAB BUTTONS -->
 <button onclick="showTab('pipe')">Pipe Tool</button>
 <button onclick="showTab('converter')">Unit Converter</button>
 
@@ -31,24 +36,40 @@ svg text { font-size: 10px; }
 
 <h3>Pipe Layout</h3>
 
-<label>Pipes:</label>
+<!-- PIPE TYPE -->
+<label>Pipe Type:</label>
+<select id="pipeType" onchange="loadSizes()">
+  <option value="steel40">Sch 40 Steel</option>
+  <option value="steel80">Sch 80 Steel</option>
+  <option value="copper">Copper</option>
+  <option value="k65">K65 Refrigeration</option>
+  <option value="dairy">Dairy Tube</option>
+</select><br>
+
+<!-- PIPE SIZE -->
+<label>Size:</label>
+<select id="pipeSize"></select><br>
+
+<!-- NUMBER OF PIPES -->
+<label>Number of Pipes:</label>
 <input id="count" type="number" value="4"><br>
 
-<label>OD (mm):</label>
-<input id="od" type="number" value="114"><br>
-
+<!-- INSULATION -->
 <label>Insulation (mm):</label>
 <input id="ins" type="number" value="25"><br>
 
+<!-- SPACING MODE -->
 <label>Spacing Mode:</label>
 <select id="mode">
   <option value="centre">Centre Spacing</option>
   <option value="clearance">Clearance</option>
 </select><br>
 
+<!-- SPACING VALUE -->
 <label>Spacing / Clearance (mm):</label>
 <input id="spacing" type="number" value="100"><br>
 
+<!-- ALIGNMENT -->
 <label>Alignment:</label>
 <select id="align">
   <option value="center">Centre</option>
@@ -85,29 +106,112 @@ svg text { font-size: 10px; }
 
 <script>
 
-// TAB SWITCH
+/* =====================================================
+   TAB SWITCHING FUNCTION
+===================================================== */
 function showTab(tab) {
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
   document.getElementById(tab).classList.add("active");
 }
 
-// ROUND TO 25
+/* =====================================================
+   PIPE DATABASE (THIS DRIVES OD AUTOMATICALLY)
+===================================================== */
+const pipeData = {
+
+  steel40: {
+    "DN25": 33.4,
+    "DN32": 42.2,
+    "DN40": 48.3,
+    "DN50": 60.3,
+    "DN65": 76.1,
+    "DN80": 88.9,
+    "DN100": 114.3,
+    "DN150": 168.3
+  },
+
+  steel80: {
+    "DN25": 33.4,
+    "DN32": 42.2,
+    "DN40": 48.3,
+    "DN50": 60.3,
+    "DN65": 76.1,
+    "DN80": 88.9,
+    "DN100": 114.3,
+    "DN150": 168.3
+  },
+
+  copper: {
+    "15mm": 15.9,
+    "22mm": 22.2,
+    "28mm": 28.6,
+    "35mm": 34.9,
+    "42mm": 42.2,
+    "54mm": 54.0
+  },
+
+  k65: {
+    "16mm": 16,
+    "20mm": 20,
+    "25mm": 25,
+    "32mm": 32,
+    "40mm": 40
+  },
+
+  dairy: {
+    "25": 25,
+    "32": 32,
+    "40": 40,
+    "50": 50,
+    "65": 65,
+    "80": 80,
+    "100": 100
+  }
+};
+
+/* =====================================================
+   LOAD PIPE SIZES BASED ON TYPE
+===================================================== */
+function loadSizes() {
+  const type = document.getElementById("pipeType").value;
+  const sizeSelect = document.getElementById("pipeSize");
+
+  sizeSelect.innerHTML = "";
+
+  Object.keys(pipeData[type]).forEach(size => {
+    const opt = document.createElement("option");
+    opt.value = size;
+    opt.textContent = size;
+    sizeSelect.appendChild(opt);
+  });
+}
+
+/* =====================================================
+   ROUND TO NEAREST 25mm
+===================================================== */
 function round25(x) {
   return Math.round(x / 25) * 25;
 }
 
-// DRAW PIPE TOOL
+/* =====================================================
+   DRAW PIPE DIAGRAM
+===================================================== */
 function draw() {
 
   const count = +document.getElementById("count").value;
-  const od = +document.getElementById("od").value;
   const ins = +document.getElementById("ins").value;
   const mode = document.getElementById("mode").value;
   const spacingInput = +document.getElementById("spacing").value;
   const align = document.getElementById("align").value;
 
-  const totalOD = od + 2*ins;
+  const type = document.getElementById("pipeType").value;
+  const size = document.getElementById("pipeSize").value;
 
+  const od = pipeData[type][size];
+
+  const totalOD = od + 2 * ins;
+
+  /* DETERMINE SPACING */
   let centreSpacing;
 
   if (mode === "centre") {
@@ -122,10 +226,11 @@ function draw() {
   svg.innerHTML = "";
 
   const scale = 0.5;
-  const r = (totalOD/2) * scale;
+  const r = (totalOD / 2) * scale;
 
   let baseY = 150;
 
+  /* DRAW PIPES */
   for (let i = 0; i < count; i++) {
 
     let cy;
@@ -136,7 +241,7 @@ function draw() {
 
     const cx = 80 + i * centreSpacing * scale;
 
-    // outer
+    /* OUTER (INSULATION) */
     const outer = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     outer.setAttribute("cx", cx);
     outer.setAttribute("cy", cy);
@@ -144,7 +249,7 @@ function draw() {
     outer.setAttribute("stroke", "black");
     outer.setAttribute("fill", "none");
 
-    // inner
+    /* INNER (PIPE) */
     const inner = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     inner.setAttribute("cx", cx);
     inner.setAttribute("cy", cy);
@@ -156,7 +261,7 @@ function draw() {
     svg.appendChild(inner);
   }
 
-  // ===== DIMENSION: TOTAL WIDTH =====
+  /* TOTAL WIDTH DIMENSION */
   const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
   line.setAttribute("x1", 80);
   line.setAttribute("y1", 250);
@@ -173,7 +278,7 @@ function draw() {
 
   svg.appendChild(text);
 
-  // ===== CENTRE SPACING TEXT =====
+  /* CENTRE SPACING LABEL */
   const spacingText = document.createElementNS("http://www.w3.org/2000/svg", "text");
   spacingText.setAttribute("x", 200);
   spacingText.setAttribute("y", 20);
@@ -182,7 +287,9 @@ function draw() {
   svg.appendChild(spacingText);
 }
 
-// COPY IMAGE
+/* =====================================================
+   COPY IMAGE TO CLIPBOARD
+===================================================== */
 async function copyImage() {
   const svg = document.getElementById("diagram");
   const data = new XMLSerializer().serializeToString(svg);
@@ -211,7 +318,9 @@ async function copyImage() {
   img.src = url;
 }
 
-// ===== UNIT CONVERTER =====
+/* =====================================================
+   UNIT CONVERTER DATA
+===================================================== */
 const data = {
   length: { mm:1, m:1000, inch:25.4, ft:304.8 },
   volume: { L:1, m3:1000, ft3:28.3168 },
@@ -219,6 +328,7 @@ const data = {
   massflow: { kgs:1, kgh:1/3600 }
 };
 
+/* LOAD UNITS */
 function loadUnits() {
   const cat = document.getElementById("category").value;
   const container = document.getElementById("units");
@@ -235,16 +345,15 @@ function loadUnits() {
     input.type = "number";
 
     input.oninput = () => convert(unit, input.value);
-
     div.onclick = () => setActive(unit);
 
     div.appendChild(label);
     div.appendChild(input);
-
     container.appendChild(div);
   });
 }
 
+/* SET ACTIVE UNIT */
 function setActive(unit) {
   document.querySelectorAll(".unit").forEach(el => {
     const u = el.querySelector("span").textContent;
@@ -255,6 +364,7 @@ function setActive(unit) {
   });
 }
 
+/* CONVERT VALUES */
 function convert(unit, value) {
   const cat = document.getElementById("category").value;
   const base = value * data[cat][unit];
@@ -271,7 +381,9 @@ function convert(unit, value) {
   setActive(unit);
 }
 
+/* INITIALISE */
 loadUnits();
+loadSizes();
 
 </script>
 
