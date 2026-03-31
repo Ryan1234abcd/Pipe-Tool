@@ -1,21 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
 <title>Mechanical Tools</title>
+
 <style>
-  body { font-family: Arial; padding: 20px; }
-  button { margin: 5px; cursor: pointer; }
+body { font-family: Arial; padding: 20px; }
+button { margin: 5px; }
 
-  .tab { display: none; }
-  .tab.active { display: block; }
+.tab { display: none; }
+.tab.active { display: block; }
 
-  .unit { padding: 5px; cursor: pointer; }
-  .unit.active { font-weight: bold; color: black; }
-  .unit.inactive { color: #aaa; }
+.unit { padding: 5px; cursor: pointer; }
+.unit.active { font-weight: bold; }
+.unit.inactive { color: #aaa; }
 
-  input { margin-left: 10px; }
+svg text { font-size: 10px; }
 </style>
+
 </head>
 <body>
 
@@ -24,13 +26,10 @@
 <button onclick="showTab('pipe')">Pipe Tool</button>
 <button onclick="showTab('converter')">Unit Converter</button>
 
-<!-- PIPE TOOL -->
+<!-- ================= PIPE TOOL ================= -->
 <div id="pipe" class="tab active">
 
 <h3>Pipe Layout</h3>
-
-<label>Name:</label>
-<input id="name" value="Bridge 1"><br>
 
 <label>Pipes:</label>
 <input id="count" type="number" value="4"><br>
@@ -41,8 +40,14 @@
 <label>Insulation (mm):</label>
 <input id="ins" type="number" value="25"><br>
 
-<label>Spacing (mm):</label>
-<input id="spacing" type="number" value="200"><br>
+<label>Spacing Mode:</label>
+<select id="mode">
+  <option value="centre">Centre Spacing</option>
+  <option value="clearance">Clearance</option>
+</select><br>
+
+<label>Spacing / Clearance (mm):</label>
+<input id="spacing" type="number" value="100"><br>
 
 <label>Alignment:</label>
 <select id="align">
@@ -55,14 +60,14 @@
 <button onclick="draw()">Generate</button>
 
 <br><br>
-<svg id="diagram" width="800" height="250"></svg>
+<svg id="diagram" width="900" height="300"></svg>
 
 <br>
 <button onclick="copyImage()">Copy Diagram</button>
 
 </div>
 
-<!-- UNIT CONVERTER -->
+<!-- ================= UNIT CONVERTER ================= -->
 <div id="converter" class="tab">
 
 <h3>Unit Converter</h3>
@@ -86,53 +91,95 @@ function showTab(tab) {
   document.getElementById(tab).classList.add("active");
 }
 
-// PIPE DRAW
+// ROUND TO 25
+function round25(x) {
+  return Math.round(x / 25) * 25;
+}
+
+// DRAW PIPE TOOL
 function draw() {
+
   const count = +document.getElementById("count").value;
   const od = +document.getElementById("od").value;
   const ins = +document.getElementById("ins").value;
-  const spacing = +document.getElementById("spacing").value;
+  const mode = document.getElementById("mode").value;
+  const spacingInput = +document.getElementById("spacing").value;
   const align = document.getElementById("align").value;
+
+  const totalOD = od + 2*ins;
+
+  let centreSpacing;
+
+  if (mode === "centre") {
+    centreSpacing = round25(spacingInput);
+  } else {
+    centreSpacing = round25(totalOD + spacingInput);
+  }
+
+  const totalWidth = (count - 1) * centreSpacing + totalOD;
 
   const svg = document.getElementById("diagram");
   svg.innerHTML = "";
 
   const scale = 0.5;
-  const rOuter = (od/2 + ins) * scale;
+  const r = (totalOD/2) * scale;
 
-  let baseY = 120;
+  let baseY = 150;
 
   for (let i = 0; i < count; i++) {
 
     let cy;
 
-    if (align === "center") {
-      cy = baseY;
-    } else if (align === "top") {
-      cy = baseY + rOuter;
-    } else {
-      cy = baseY - rOuter;
-    }
+    if (align === "center") cy = baseY;
+    else if (align === "top") cy = baseY + r;
+    else cy = baseY - r;
 
-    const cx = 60 + i * spacing * scale;
+    const cx = 80 + i * centreSpacing * scale;
 
+    // outer
     const outer = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     outer.setAttribute("cx", cx);
     outer.setAttribute("cy", cy);
-    outer.setAttribute("r", rOuter);
-    outer.setAttribute("fill", "none");
+    outer.setAttribute("r", r);
     outer.setAttribute("stroke", "black");
+    outer.setAttribute("fill", "none");
 
+    // inner
     const inner = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     inner.setAttribute("cx", cx);
     inner.setAttribute("cy", cy);
     inner.setAttribute("r", (od/2)*scale);
-    inner.setAttribute("fill", "none");
     inner.setAttribute("stroke", "gray");
+    inner.setAttribute("fill", "none");
 
     svg.appendChild(outer);
     svg.appendChild(inner);
   }
+
+  // ===== DIMENSION: TOTAL WIDTH =====
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line.setAttribute("x1", 80);
+  line.setAttribute("y1", 250);
+  line.setAttribute("x2", 80 + totalWidth * scale);
+  line.setAttribute("y2", 250);
+  line.setAttribute("stroke", "black");
+
+  svg.appendChild(line);
+
+  const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  text.setAttribute("x", 200);
+  text.setAttribute("y", 270);
+  text.textContent = "Total Width: " + totalWidth + " mm";
+
+  svg.appendChild(text);
+
+  // ===== CENTRE SPACING TEXT =====
+  const spacingText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  spacingText.setAttribute("x", 200);
+  spacingText.setAttribute("y", 20);
+  spacingText.textContent = "Centre Spacing: " + centreSpacing + " mm";
+
+  svg.appendChild(spacingText);
 }
 
 // COPY IMAGE
@@ -145,8 +192,8 @@ async function copyImage() {
   const img = new Image();
   img.onload = async () => {
     const canvas = document.createElement("canvas");
-    canvas.width = 800;
-    canvas.height = 250;
+    canvas.width = 900;
+    canvas.height = 300;
 
     const ctx = canvas.getContext("2d");
     ctx.drawImage(img, 0, 0);
@@ -164,7 +211,7 @@ async function copyImage() {
   img.src = url;
 }
 
-// UNIT CONVERTER DATA
+// ===== UNIT CONVERTER =====
 const data = {
   length: { mm:1, m:1000, inch:25.4, ft:304.8 },
   volume: { L:1, m3:1000, ft3:28.3168 },
@@ -172,9 +219,6 @@ const data = {
   massflow: { kgs:1, kgh:1/3600 }
 };
 
-let activeUnit = null;
-
-// LOAD UNITS
 function loadUnits() {
   const cat = document.getElementById("category").value;
   const container = document.getElementById("units");
@@ -201,24 +245,16 @@ function loadUnits() {
   });
 }
 
-// SET ACTIVE UNIT
 function setActive(unit) {
-  activeUnit = unit;
-
   document.querySelectorAll(".unit").forEach(el => {
     const u = el.querySelector("span").textContent;
-
     el.classList.remove("active", "inactive");
 
-    if (u === unit) {
-      el.classList.add("active");
-    } else {
-      el.classList.add("inactive");
-    }
+    if (u === unit) el.classList.add("active");
+    else el.classList.add("inactive");
   });
 }
 
-// CONVERT
 function convert(unit, value) {
   const cat = document.getElementById("category").value;
   const base = value * data[cat][unit];
@@ -235,7 +271,6 @@ function convert(unit, value) {
   setActive(unit);
 }
 
-// INIT
 loadUnits();
 
 </script>
